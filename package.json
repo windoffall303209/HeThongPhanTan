@@ -1,0 +1,40 @@
+{
+  "name": "p2p-chat-system",
+  "version": "1.0.0",
+  "description": "Peer-to-peer chat system with Node.js, Express, TCP sockets, Socket.IO, and MySQL.",
+  "type": "module",
+  "main": "src/bootstrap/server.js",
+  "scripts": {
+    "bootstrap": "node src/bootstrap/server.js",
+    "peer": "node src/peer/server.js",
+    "peer:a": "cross-env PEER_ID=peer-a USERNAME=Alice TCP_PORT=5101 WEB_PORT=3101 node src/peer/server.js",
+    "peer:b": "cross-env PEER_ID=peer-b USERNAME=Bob TCP_PORT=5102 WEB_PORT=3102 node src/peer/server.js",
+    "peer:c": "cross-env PEER_ID=peer-c USERNAME=Carol TCP_PORT=5103 WEB_PORT=3103 node src/peer/server.js",
+    "dev:bootstrap": "nodemon src/bootstrap/server.js",
+    "dev:peer": "nodemon src/peer/server.js",
+    "check": "node scripts/check-syntax.mjs"
+  },
+  "keywords": [
+    "p2p",
+    "chat",
+    "tcp",
+    "express",
+    "socket.io",
+    "mysql"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "mysql2": "^3.15.3",
+    "socket.io": "^4.8.1",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "nodemon": "^3.1.10"
+  }
+}

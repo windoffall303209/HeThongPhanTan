@@ -1,0 +1,9 @@
+node_modules/
+.env
+received_files/*
+!received_files/.gitkeep
+tmp-logs/
+screenshots/
+npm-debug.log*
+*.log
+docs/

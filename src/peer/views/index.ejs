@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= self.username %> — P2P Chat</title>
+    <meta name="description" content="P2P Chat — giao diện nhắn tin ngang hàng" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>
+    <div
+      id="app"
+      data-peer-id="<%= self.peerId %>"
+      data-username="<%= self.username %>"
+      data-max-file-bytes="<%= maxFileBytes %>"
+    >
+      <!-- ===== LEFT SIDEBAR — Contacts ===== -->
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="brand">
+            <div class="brand-logo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div>
+              <strong>P2P Chat</strong>
+              <span>Distributed System</span>
+            </div>
+          </div>
+
+          <!-- Current user -->
+          <div class="user-card">
+            <div class="user-avatar"><%= self.username[0].toUpperCase() %></div>
+            <div class="user-info">
+              <h1><%= self.username %></h1>
+              <span id="connection-pill" class="status-badge online">Online</span>
+            </div>
+          </div>
+
+          <div class="user-meta">
+            <div class="meta-row"><span>ID</span><span><%= self.peerId %></span></div>
+            <div class="meta-row"><span>TCP</span><span><%= self.tcpPort %></span></div>
+            <div class="meta-row"><span>Web</span><span><%= self.webPort %></span></div>
+            <div class="meta-row"><span>Bootstrap</span><span><%= bootstrapUrl %></span></div>
+            <div class="meta-row"><span>Mã hóa</span><span><%= encryptionEnabled ? 'AES-256-GCM' : 'Tắt' %></span></div>
+          </div>
+        </div>
+
+        <!-- Peer contacts -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-head">
+            <h3>Danh bạ</h3>
+            <span id="peer-count">0 online</span>
+          </div>
+          <div id="peer-list" class="contact-list"></div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-bar">
+          <div class="stat"><strong id="stat-sent">0</strong><span>Gửi</span></div>
+          <div class="stat"><strong id="stat-delivered">0</strong><span>Đến</span></div>
+          <div class="stat"><strong id="stat-failed">0</strong><span>Lỗi</span></div>
+          <div class="stat"><strong id="stat-queued">0</strong><span>Chờ</span></div>
+        </div>
+
+        <div class="sidebar-actions">
+          <button id="sync-btn" type="button" class="btn-sidebar">Đồng bộ</button>
+          <button id="start-churn-btn" type="button" class="btn-sidebar">Churn bật</button>
+          <button id="stop-churn-btn" type="button" class="btn-sidebar">Churn tắt</button>
+        </div>
+      </aside>
+
+      <!-- ===== CENTER — Chat Area ===== -->
+      <main class="chat-area">
+        <!-- Tabs -->
+        <div class="chat-tabs" role="tablist">
+          <button class="chat-tab active" data-panel="direct-panel" type="button">Nhắn tin</button>
+          <button class="chat-tab" data-panel="group-panel" type="button">Nhóm</button>
+          <button class="chat-tab" data-panel="broadcast-panel" type="button">Broadcast</button>
+          <button class="chat-tab" data-panel="file-panel" type="button">Gửi file</button>
+        </div>
+
+        <!-- Panels / Composer -->
+        <div id="direct-panel" class="panel active">
+          <form id="direct-form" class="composer">
+            <select id="direct-peer" required></select>
+            <div class="composer-row">
+              <textarea id="direct-content" rows="1" placeholder="Nhập tin nhắn..." required></textarea>
+              <button type="submit" class="btn-send" aria-label="Gửi">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div id="group-panel" class="panel">
+          <form id="group-create-form" class="composer-inline">
+            <input id="group-name" placeholder="Tên nhóm" required />
+            <select id="group-members" multiple></select>
+            <button type="submit" class="btn btn-primary btn-sm">Tạo nhóm</button>
+          </form>
+          <form id="group-message-form" class="composer">
+            <select id="group-select" required></select>
+            <div class="composer-row">
+              <textarea id="group-content" rows="1" placeholder="Nhắn nhóm..." required></textarea>
+              <button type="submit" class="btn-send" aria-label="Gửi">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div id="broadcast-panel" class="panel">
+          <form id="broadcast-form" class="composer">
+            <div class="composer-row">
+              <textarea id="broadcast-content" rows="1" placeholder="Gửi tới tất cả peer..." required></textarea>
+              <button type="submit" class="btn-send" aria-label="Broadcast">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div id="file-panel" class="panel">
+          <form id="file-form" class="composer">
+            <select id="file-peer" required></select>
+            <input id="file-input" type="file" required />
+            <button type="submit" class="btn btn-primary btn-sm">Gửi file</button>
+            <p class="hint">Tối đa <%= Math.round(maxFileBytes / 1024 / 1024) %> MB, gửi qua TCP base64.</p>
+          </form>
+        </div>
+
+        <!-- Filter -->
+        <div class="messages-header">
+          <div class="messages-title">
+            <h3>Tin nhắn</h3>
+            <span id="message-count" class="count-badge">0</span>
+          </div>
+          <select id="conversation-filter" aria-label="Lọc hội thoại">
+            <option value="all">Tất cả</option>
+          </select>
+        </div>
+
+        <!-- Messages -->
+        <div id="message-list" class="message-list"></div>
+      </main>
+
+      <!-- ===== RIGHT SIDEBAR — Info ===== -->
+      <aside class="info-panel">
+        <div class="sidebar-section">
+          <div class="sidebar-section-head">
+            <h3>Nhóm chat</h3>
+            <span id="group-count" class="count-badge">0</span>
+          </div>
+          <div id="group-list" class="group-list"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-head">
+            <h3>Nhật ký hệ thống</h3>
+          </div>
+          <div id="log-list" class="log-list"></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/public/app.js" type="module"></script>
+  </body>
+</html>
