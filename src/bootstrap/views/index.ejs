@@ -7,16 +7,31 @@
     <meta name="description" content="Bootstrap server for P2P Chat System" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/bootstrap-public/styles.css" />
   </head>
   <body>
     <nav class="topnav">
       <div class="nav-brand">
         <div class="logo">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
         </div>
         <span>P2P Bootstrap</span>
+        <span class="nav-url">127.0.0.1:3000</span>
       </div>
       <div class="nav-stat">
         <span class="stat-dot"></span>
@@ -26,64 +41,135 @@
     </nav>
 
     <main class="page">
-      <header class="page-header">
-        <div>
-          <h1>Network Control</h1>
-          <p>Khởi tạo peer, quản lý process, theo dõi trạng thái mạng P2P.</p>
+      <div class="layout">
+        <!-- Left: Create Peer Form -->
+        <aside class="panel-form">
+          <form id="start-peer-form" class="card form-card">
+            <div class="card-header">
+              <h2>Tạo Peer mới</h2>
+              <button id="fill-defaults-btn" type="button" class="btn btn-text">
+                Gợi ý
+              </button>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="peer-id">Peer ID</label>
+                <input
+                  id="peer-id"
+                  name="peerId"
+                  placeholder="peer-a"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="username">Tên hiển thị</label>
+                <input
+                  id="username"
+                  name="username"
+                  placeholder="Alice"
+                  required
+                />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="tcp-port">TCP Port</label>
+                <input
+                  id="tcp-port"
+                  name="tcpPort"
+                  type="number"
+                  min="1"
+                  placeholder="5101"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="web-port">Web Port</label>
+                <input
+                  id="web-port"
+                  name="webPort"
+                  type="number"
+                  min="1"
+                  placeholder="3101"
+                  required
+                />
+              </div>
+            </div>
+            <div class="field">
+              <label for="host">Host</label>
+              <input id="host" name="host" value="127.0.0.1" required />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">
+              Khởi động Peer
+            </button>
+            <p id="form-message" class="form-message"></p>
+          </form>
+        </aside>
+
+        <!-- Right: Peers + Processes (tabbed table) -->
+        <div class="panel-main">
+          <div class="card panel-card">
+            <div class="panel-head">
+              <div class="panel-tabs">
+                <button class="panel-tab active" data-panel="peers">
+                  Peers đã đăng ký
+                  <span id="peer-tab-count" class="tab-badge">0</span>
+                </button>
+                <button class="panel-tab" data-panel="processes">
+                  Processes
+                </button>
+              </div>
+              <div class="tab-actions">
+                <button id="refresh-btn" type="button" class="btn btn-text">
+                  Làm mới
+                </button>
+                <button
+                  id="stop-all-btn"
+                  type="button"
+                  class="btn btn-danger-text"
+                >
+                  Dừng tất cả
+                </button>
+              </div>
+            </div>
+
+            <!-- Peers tab -->
+            <div id="panel-peers" class="panel-pane">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Peer</th>
+                    <th>ID</th>
+                    <th>TCP</th>
+                    <th>Web</th>
+                    <th>Nguồn</th>
+                    <th>Trạng thái</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="peer-list"></tbody>
+              </table>
+            </div>
+
+            <!-- Processes tab -->
+            <div id="panel-processes" class="panel-pane" style="display: none">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Peer</th>
+                    <th>ID</th>
+                    <th>PID</th>
+                    <th>TCP · Web</th>
+                    <th>Trạng thái</th>
+                    <th>Bắt đầu</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="process-list"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </header>
-
-      <div class="grid">
-        <!-- Start Peer Form -->
-        <form id="start-peer-form" class="card form-card">
-          <div class="card-header">
-            <h2>Tạo Peer mới</h2>
-            <button id="fill-defaults-btn" type="button" class="btn btn-text">Gợi ý</button>
-          </div>
-
-          <div class="field">
-            <label for="peer-id">Peer ID</label>
-            <input id="peer-id" name="peerId" placeholder="peer-a" required />
-          </div>
-          <div class="field">
-            <label for="username">Tên hiển thị</label>
-            <input id="username" name="username" placeholder="Alice" required />
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <label for="tcp-port">TCP Port</label>
-              <input id="tcp-port" name="tcpPort" type="number" min="1" placeholder="5101" required />
-            </div>
-            <div class="field">
-              <label for="web-port">Web Port</label>
-              <input id="web-port" name="webPort" type="number" min="1" placeholder="3101" required />
-            </div>
-          </div>
-          <div class="field">
-            <label for="host">Host</label>
-            <input id="host" name="host" value="127.0.0.1" required />
-          </div>
-          <button type="submit" class="btn btn-primary btn-block">Khởi động Peer</button>
-          <p id="form-message" class="form-message"></p>
-        </form>
-
-        <!-- Peers -->
-        <section class="card">
-          <div class="card-header">
-            <h2>Peers đã đăng ký</h2>
-            <button id="refresh-btn" type="button" class="btn btn-text">Làm mới</button>
-          </div>
-          <div id="peer-list" class="item-list"></div>
-        </section>
-
-        <!-- Processes -->
-        <section class="card">
-          <div class="card-header">
-            <h2>Processes</h2>
-            <button id="stop-all-btn" type="button" class="btn btn-danger-text">Dừng tất cả</button>
-          </div>
-          <div id="process-list" class="item-list"></div>
-        </section>
       </div>
     </main>
 

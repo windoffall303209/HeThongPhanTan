@@ -34,6 +34,7 @@ export const config = {
     peerSyncIntervalMs: intFromEnv("PEER_SYNC_INTERVAL_MS", 5000),
     offlinePollIntervalMs: intFromEnv("OFFLINE_POLL_INTERVAL_MS", 5000),
     maxFileBytes: intFromEnv("MAX_FILE_BYTES", 10 * 1024 * 1024),
+    introducerUrl: process.env.INTRODUCER_URL ?? null,
   },
   db: {
     enabled: boolFromEnv("DB_ENABLED", true),

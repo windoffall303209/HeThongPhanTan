@@ -1,0 +1,76 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - img [ref=e5]
+      - generic [ref=e8]: P2P Bootstrap
+      - generic [ref=e9]: 127.0.0.1:3000
+    - generic [ref=e10]:
+      - strong [ref=e12]: "0"
+      - generic [ref=e13]: peers online
+  - main [ref=e14]:
+    - generic [ref=e15]:
+      - complementary [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - heading "Tạo Peer mới" [level=2] [ref=e19]
+            - button "Gợi ý" [ref=e20] [cursor=pointer]
+          - generic [ref=e21]:
+            - generic [ref=e22]:
+              - generic [ref=e23]: Peer ID
+              - textbox "Peer ID" [ref=e24]:
+                - /placeholder: peer-a
+                - text: peer-b
+            - generic [ref=e25]:
+              - generic [ref=e26]: Tên hiển thị
+              - textbox "Tên hiển thị" [ref=e27]:
+                - /placeholder: Alice
+                - text: User 2
+          - generic [ref=e28]:
+            - generic [ref=e29]:
+              - generic [ref=e30]: TCP Port
+              - spinbutton "TCP Port" [ref=e31]: "5101"
+            - generic [ref=e32]:
+              - generic [ref=e33]: Web Port
+              - spinbutton "Web Port" [ref=e34]: "3101"
+          - generic [ref=e35]:
+            - generic [ref=e36]: Host
+            - textbox "Host" [ref=e37]: 127.0.0.1
+          - button "Khởi động Peer" [ref=e38] [cursor=pointer]
+          - paragraph [ref=e39]: Peer peer-test-old đã được bật.
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - button "Peers đã đăng ký 1" [ref=e44] [cursor=pointer]:
+              - text: Peers đã đăng ký
+              - generic [ref=e45]: "1"
+            - button "Processes" [ref=e46] [cursor=pointer]
+          - generic [ref=e47]:
+            - button "Làm mới" [ref=e48] [cursor=pointer]
+            - button "Dừng tất cả" [ref=e49] [cursor=pointer]
+        - table [ref=e51]:
+          - rowgroup [ref=e52]:
+            - row "Peer ID TCP Web Nguồn Trạng thái" [ref=e53]:
+              - columnheader "Peer" [ref=e54]
+              - columnheader "ID" [ref=e55]
+              - columnheader "TCP" [ref=e56]
+              - columnheader "Web" [ref=e57]
+              - columnheader "Nguồn" [ref=e58]
+              - columnheader "Trạng thái" [ref=e59]
+              - columnheader [ref=e60]
+          - rowgroup [ref=e61]:
+            - row "U User Test peer-test-old 5401 3401 Launcher · running · PID 32464 offline Chat UI Dừng" [ref=e227]:
+              - cell "U User Test" [ref=e228]:
+                - generic [ref=e229]:
+                  - generic [ref=e230]: U
+                  - generic [ref=e231]: User Test
+              - cell "peer-test-old" [ref=e232]
+              - cell "5401" [ref=e233]
+              - cell "3401" [ref=e234]
+              - cell "Launcher · running · PID 32464" [ref=e235]
+              - cell "offline" [ref=e236]:
+                - generic [ref=e237]: offline
+              - cell "Chat UI Dừng" [ref=e238]:
+                - generic [ref=e239]:
+                  - link "Chat UI" [ref=e240] [cursor=pointer]:
+                    - /url: http://127.0.0.1:3401
+                  - button "Dừng" [ref=e241] [cursor=pointer]

@@ -1,9 +1,9 @@
-import { requestJson } from '../../shared/http.js';
+import { requestJson } from "../../shared/http.js";
 
 export class BootstrapClient {
   // Wraps bootstrap HTTP APIs used by each peer runtime.
   constructor(baseUrl) {
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.baseUrl = baseUrl.replace(/\/$/, "");
   }
 
   // Builds an absolute bootstrap URL from a route path.
@@ -13,31 +13,31 @@ export class BootstrapClient {
 
   // Registers this peer with the bootstrap tracker.
   register(peer) {
-    return requestJson(this.url('/api/register'), {
-      method: 'POST',
-      body: JSON.stringify(peer)
+    return requestJson(this.url("/api/register"), {
+      method: "POST",
+      body: JSON.stringify(peer),
     });
   }
 
   // Marks this peer offline at the bootstrap tracker.
   unregister(peerId) {
-    return requestJson(this.url('/api/unregister'), {
-      method: 'POST',
-      body: JSON.stringify({ peerId })
+    return requestJson(this.url("/api/unregister"), {
+      method: "POST",
+      body: JSON.stringify({ peerId }),
     });
   }
 
   // Refreshes this peer's online status.
   heartbeat(peerId) {
-    return requestJson(this.url('/api/heartbeat'), {
-      method: 'POST',
-      body: JSON.stringify({ peerId })
+    return requestJson(this.url("/api/heartbeat"), {
+      method: "POST",
+      body: JSON.stringify({ peerId }),
     });
   }
 
   // Fetches all known peers for discovery.
   listPeers() {
-    return requestJson(this.url('/api/peers'));
+    return requestJson(this.url("/api/peers"));
   }
 
   // Fetches one peer by id for direct routing.
@@ -47,59 +47,66 @@ export class BootstrapClient {
 
   // Creates group metadata on the bootstrap server.
   createGroup(group) {
-    return requestJson(this.url('/api/groups'), {
-      method: 'POST',
-      body: JSON.stringify(group)
+    return requestJson(this.url("/api/groups"), {
+      method: "POST",
+      body: JSON.stringify(group),
     });
   }
 
   // Lists groups that include one peer.
   listGroups(peerId) {
-    return requestJson(this.url(`/api/groups?peerId=${encodeURIComponent(peerId)}`));
+    return requestJson(
+      this.url(`/api/groups?peerId=${encodeURIComponent(peerId)}`),
+    );
   }
 
   // Adds peers to an existing group.
   addGroupMembers(groupId, members) {
-    return requestJson(this.url(`/api/groups/${encodeURIComponent(groupId)}/members`), {
-      method: 'POST',
-      body: JSON.stringify({ members })
-    });
+    return requestJson(
+      this.url(`/api/groups/${encodeURIComponent(groupId)}/members`),
+      {
+        method: "POST",
+        body: JSON.stringify({ members }),
+      },
+    );
   }
 
   // Stores one message for later delivery to an offline peer.
   storeOfflineMessage(targetPeerId, message) {
-    return requestJson(this.url('/api/offline-messages'), {
-      method: 'POST',
-      body: JSON.stringify({ targetPeerId, message })
+    return requestJson(this.url("/api/offline-messages"), {
+      method: "POST",
+      body: JSON.stringify({ targetPeerId, message }),
     });
   }
 
   // Retrieves queued messages for a reconnecting peer.
   getOfflineMessages(peerId) {
-    return requestJson(this.url(`/api/offline-messages/${encodeURIComponent(peerId)}`));
+    return requestJson(
+      this.url(`/api/offline-messages/${encodeURIComponent(peerId)}`),
+    );
   }
 
   // Confirms queued offline messages were delivered.
   ackOfflineMessages(ids) {
-    return requestJson(this.url('/api/offline-messages/ack'), {
-      method: 'POST',
-      body: JSON.stringify({ ids })
+    return requestJson(this.url("/api/offline-messages/ack"), {
+      method: "POST",
+      body: JSON.stringify({ ids }),
     });
   }
 
   // Persists a direct message record.
   saveDirectMessage(message) {
-    return requestJson(this.url('/api/messages/direct'), {
-      method: 'POST',
-      body: JSON.stringify(message)
+    return requestJson(this.url("/api/messages/direct"), {
+      method: "POST",
+      body: JSON.stringify(message),
     });
   }
 
   // Persists a group message record.
   saveGroupMessage(message) {
-    return requestJson(this.url('/api/messages/group'), {
-      method: 'POST',
-      body: JSON.stringify(message)
+    return requestJson(this.url("/api/messages/group"), {
+      method: "POST",
+      body: JSON.stringify(message),
     });
   }
 
@@ -110,25 +117,34 @@ export class BootstrapClient {
 
   // Persists delivery acknowledgement metadata.
   saveAck(ack) {
-    return requestJson(this.url('/api/acks'), {
-      method: 'POST',
-      body: JSON.stringify(ack)
+    return requestJson(this.url("/api/acks"), {
+      method: "POST",
+      body: JSON.stringify(ack),
     });
   }
 
   // Persists file transfer metadata.
   saveFileTransfer(fileTransfer) {
-    return requestJson(this.url('/api/file-transfers'), {
-      method: 'POST',
-      body: JSON.stringify(fileTransfer)
+    return requestJson(this.url("/api/file-transfers"), {
+      method: "POST",
+      body: JSON.stringify(fileTransfer),
+    });
+  }
+
+  // Registers this peer via an intermediate peer that proxies to bootstrap.
+  introduceViaPeer(introducerUrl, peer) {
+    const url = introducerUrl.replace(/\/$/, "") + "/api/introduce";
+    return requestJson(url, {
+      method: "POST",
+      body: JSON.stringify(peer),
     });
   }
 
   // Writes a bootstrap-side system log entry.
   addLog(scope, message, meta = {}) {
-    return requestJson(this.url('/api/logs'), {
-      method: 'POST',
-      body: JSON.stringify({ scope, message, meta })
+    return requestJson(this.url("/api/logs"), {
+      method: "POST",
+      body: JSON.stringify({ scope, message, meta }),
     });
   }
 }

@@ -249,6 +249,7 @@ export function registerRoutes(app, { store, launcher, config }) {
       const { peerId } = req.body;
       if (!peerId) return res.status(400).json({ error: 'peerId is required' });
       const processInfo = launcher.stop(peerId);
+      await store.unregisterPeer(peerId);
       await store.addLog('launcher', `Stopped peer ${peerId}`, { peerId });
       res.json({ process: processInfo });
     } catch (error) {
@@ -259,6 +260,11 @@ export function registerRoutes(app, { store, launcher, config }) {
   app.post('/api/launcher/stop-all', async (_req, res, next) => {
     try {
       const managed = launcher.stopAll();
+      await Promise.all(
+        managed
+          .filter((processInfo) => processInfo.status === 'stopping')
+          .map((processInfo) => store.unregisterPeer(processInfo.peerId))
+      );
       await store.addLog('launcher', 'Stop all launcher-owned peers requested');
       res.json({ managed });
     } catch (error) {
