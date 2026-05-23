@@ -9,3 +9,4 @@ npm-debug.log*
 .playwright-mcp/
 docs/
 bao-ve/
+.playwright-mcp

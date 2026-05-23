@@ -642,24 +642,28 @@ textarea::placeholder {
 }
 .badge.delivered,
 .badge.received,
-.badge.delivered_from_queue,
 .badge.delivered_via_relay {
   color: #065f46;
   background: var(--success-light);
+}
+.badge.delivered_from_queue {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
 }
 .badge.failed,
 .badge.failed_queued {
   color: #9a3412;
   background: var(--warning-light);
 }
+.badge.failed_queued {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+}
 .badge.partial {
   color: var(--primary);
   background: var(--primary-light);
-}
-
-.bubble.self .badge {
-  background: rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* File preview in chat bubbles */

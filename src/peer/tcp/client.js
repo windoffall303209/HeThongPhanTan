@@ -70,6 +70,10 @@ export async function sendTcpPayload(peer, payload, options = {}) {
       return { ok: true, attempts: attempt, ack };
     } catch (error) {
       lastError = error;
+      // Exponential backoff before retrying (200ms, 400ms, 800ms, …).
+      if (attempt <= retries) {
+        await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt - 1)));
+      }
     }
   }
 

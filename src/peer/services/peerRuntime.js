@@ -36,6 +36,7 @@ export class PeerRuntime {
     this.churnTimer = null;
     this.churnOffline = false;
     this.started = false;
+    this.seenMessageIds = new Set();
     this.timers = [];
     this.stats = {
       sent: 0,
@@ -256,6 +257,19 @@ export class PeerRuntime {
       throw new Error("peer is currently offline by churn simulation");
     }
 
+    // Skip duplicate messages caused by sender retries with lost ACKs.
+    if (payload.messageId && payload.type !== MESSAGE_TYPES.RELAY && payload.type !== MESSAGE_TYPES.ACK) {
+      if (this.seenMessageIds.has(payload.messageId)) {
+        return;
+      }
+      this.seenMessageIds.add(payload.messageId);
+      // Prevent unbounded growth: keep only the last 1000 message IDs.
+      if (this.seenMessageIds.size > 1000) {
+        const first = this.seenMessageIds.values().next().value;
+        this.seenMessageIds.delete(first);
+      }
+    }
+
     // Relay handling: forward the inner payload to its final destination.
     if (payload.type === MESSAGE_TYPES.RELAY) {
       await this.handleRelay(payload);
@@ -445,10 +459,8 @@ export class PeerRuntime {
     const savedPath = path.join(peerDir, safeName);
     await fs.writeFile(savedPath, file.buffer);
 
-    const payload = createBasePayload(MESSAGE_TYPES.FILE, {
+    const payload = this.createWirePayload(MESSAGE_TYPES.FILE, {
       transferId: randomUUID(),
-      fromPeerId: this.config.peer.id,
-      fromUsername: this.config.peer.username,
       toPeerId,
       fileName: file.originalname,
       mimeType: file.mimetype,
@@ -709,11 +721,19 @@ export class PeerRuntime {
     return { running: true, intervalMs };
   }
 
-  // Stops churn simulation and keeps the peer online.
-  stopChurn() {
+  // Stops churn simulation and restores the peer to online state.
+  async stopChurn() {
     if (this.churnTimer) clearInterval(this.churnTimer);
     this.churnTimer = null;
+    const wasOffline = this.churnOffline;
     this.churnOffline = false;
+    // If the peer was in the offline state during churn, restart TCP and re-register.
+    if (wasOffline) {
+      await this.safeRun(() => this.startTcpServer());
+      await this.safeRun(() => this.registerSelf());
+      this.addLog('Churn stopped: peer re-joined network');
+    }
+    this.emitState();
     return { running: false };
   }
 

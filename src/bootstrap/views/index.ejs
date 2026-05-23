@@ -31,7 +31,8 @@
           </svg>
         </div>
         <span>P2P Bootstrap</span>
-        <span class="nav-url">127.0.0.1:3000</span>
+        <span class="nav-url" id="nav-url"></span>
+        <script>document.getElementById('nav-url').textContent=location.host;</script>
       </div>
       <div class="nav-stat">
         <span class="stat-dot"></span>

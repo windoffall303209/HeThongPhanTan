@@ -361,6 +361,8 @@ socket.on("messages", (messages) => {
   renderMessages();
 });
 socket.on("message", (msg) => {
+  // Deduplicate: skip if this messageId already exists in state.
+  if (msg.messageId && state.messages.some((m) => m.messageId === msg.messageId)) return;
   state.messages.push(msg);
   renderMessages();
   if (msg.fromPeerId !== selfPeerId)

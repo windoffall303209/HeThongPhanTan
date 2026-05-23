@@ -43,6 +43,7 @@ export function encodeFrame(payload) {
 }
 
 // Parses newline-delimited TCP data into complete JSON frames.
+// Malformed lines are logged and skipped instead of crashing the handler.
 export function parseFrames(buffer) {
   const lines = buffer.split('\n');
   const rest = lines.pop() ?? '';
@@ -51,7 +52,11 @@ export function parseFrames(buffer) {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    frames.push(JSON.parse(trimmed));
+    try {
+      frames.push(JSON.parse(trimmed));
+    } catch (err) {
+      console.error(`[protocol] Skipping malformed frame: ${err.message}`);
+    }
   }
 
   return { frames, rest };

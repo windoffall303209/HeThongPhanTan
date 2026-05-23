@@ -39,21 +39,21 @@ export class TcpPeerServer {
   // Parses frames from one TCP connection and sends ACK or error frames.
   handleSocket(socket) {
     let buffer = '';
+    let processing = false;
+    let pendingFrames = [];
 
-    socket.on('data', async (chunk) => {
-      buffer += chunk.toString('utf8');
-      let parsed;
-      try {
-        parsed = parseFrames(buffer);
-      } catch (error) {
-        socket.write(encodeFrame({ type: MESSAGE_TYPES.ERROR, error: error.message }));
-        socket.end();
-        return;
-      }
+    // Prevents unhandled socket errors (e.g. ECONNRESET) from crashing the process.
+    socket.on('error', (err) => {
+      console.error(`[tcp:${this.peerId}] Socket error: ${err.message}`);
+    });
 
-      buffer = parsed.rest;
-
-      for (const payload of parsed.frames) {
+    // Serializes async payload processing to avoid race conditions when
+    // multiple data chunks arrive while an earlier await is still pending.
+    const processQueue = async () => {
+      if (processing) return;
+      processing = true;
+      while (pendingFrames.length > 0) {
+        const payload = pendingFrames.shift();
         try {
           await this.onPayload(payload, { remoteAddress: socket.remoteAddress });
           socket.write(encodeFrame(createAck(payload.messageId, this.peerId, 'received')));
@@ -66,6 +66,26 @@ export class TcpPeerServer {
             })
           );
         }
+      }
+      processing = false;
+    };
+
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let parsed;
+      try {
+        parsed = parseFrames(buffer);
+      } catch (error) {
+        socket.write(encodeFrame({ type: MESSAGE_TYPES.ERROR, error: error.message }));
+        socket.end();
+        return;
+      }
+
+      buffer = parsed.rest;
+
+      if (parsed.frames.length > 0) {
+        pendingFrames.push(...parsed.frames);
+        processQueue();
       }
     });
   }
