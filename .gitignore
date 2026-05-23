@@ -6,4 +6,6 @@ tmp-logs/
 screenshots/
 npm-debug.log*
 *.log
+.playwright-mcp/
 docs/
+bao-ve/

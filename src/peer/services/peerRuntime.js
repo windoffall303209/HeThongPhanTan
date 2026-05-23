@@ -1,11 +1,18 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { randomUUID } from 'crypto';
-import { BootstrapClient } from './bootstrapClient.js';
-import { sendTcpPayload } from '../tcp/client.js';
-import { TcpPeerServer } from '../tcp/server.js';
-import { maybeDecryptContent, maybeEncryptContent } from '../../shared/crypto.js';
-import { createBasePayload, MESSAGE_TYPES, nowIso } from '../../shared/protocol.js';
+import fs from "fs/promises";
+import path from "path";
+import { randomUUID } from "crypto";
+import { BootstrapClient } from "./bootstrapClient.js";
+import { sendTcpPayload } from "../tcp/client.js";
+import { TcpPeerServer } from "../tcp/server.js";
+import {
+  maybeDecryptContent,
+  maybeEncryptContent,
+} from "../../shared/crypto.js";
+import {
+  createBasePayload,
+  MESSAGE_TYPES,
+  nowIso,
+} from "../../shared/protocol.js";
 
 export class PeerRuntime {
   // Coordinates peer networking, bootstrap sync, storage calls, and realtime UI events.
@@ -18,7 +25,8 @@ export class PeerRuntime {
       host: config.peer.host,
       port: config.peer.tcpPort,
       peerId: config.peer.id,
-      onPayload: (payload, context) => this.handleIncomingPayload(payload, context)
+      onPayload: (payload, context) =>
+        this.handleIncomingPayload(payload, context),
     });
 
     this.peers = [];
@@ -35,7 +43,7 @@ export class PeerRuntime {
       failed: 0,
       received: 0,
       queuedOffline: 0,
-      filesReceived: 0
+      filesReceived: 0,
     };
   }
 
@@ -47,7 +55,7 @@ export class PeerRuntime {
       host: this.config.peer.host,
       tcpPort: this.config.peer.tcpPort,
       webPort: this.config.peer.webPort,
-      status: this.churnOffline ? 'offline' : 'online'
+      status: this.churnOffline ? "offline" : "online",
     };
   }
 
@@ -61,10 +69,30 @@ export class PeerRuntime {
     await this.loadMessageHistory();
     await this.pollOfflineMessages();
 
-    this.timers.push(setInterval(() => this.safeRun(() => this.heartbeat()), this.config.peer.heartbeatIntervalMs));
-    this.timers.push(setInterval(() => this.safeRun(() => this.syncPeers()), this.config.peer.peerSyncIntervalMs));
-    this.timers.push(setInterval(() => this.safeRun(() => this.syncGroups()), this.config.peer.peerSyncIntervalMs));
-    this.timers.push(setInterval(() => this.safeRun(() => this.pollOfflineMessages()), this.config.peer.offlinePollIntervalMs));
+    this.timers.push(
+      setInterval(
+        () => this.safeRun(() => this.heartbeat()),
+        this.config.peer.heartbeatIntervalMs,
+      ),
+    );
+    this.timers.push(
+      setInterval(
+        () => this.safeRun(() => this.syncPeers()),
+        this.config.peer.peerSyncIntervalMs,
+      ),
+    );
+    this.timers.push(
+      setInterval(
+        () => this.safeRun(() => this.syncGroups()),
+        this.config.peer.peerSyncIntervalMs,
+      ),
+    );
+    this.timers.push(
+      setInterval(
+        () => this.safeRun(() => this.pollOfflineMessages()),
+        this.config.peer.offlinePollIntervalMs,
+      ),
+    );
     this.started = true;
     this.emitState();
   }
@@ -82,7 +110,7 @@ export class PeerRuntime {
     try {
       return await fn();
     } catch (error) {
-      this.addLog(error.message, 'error');
+      this.addLog(error.message, "error");
       return null;
     }
   }
@@ -90,21 +118,35 @@ export class PeerRuntime {
   // Opens this peer's TCP server for inbound P2P messages.
   async startTcpServer() {
     await this.tcpServer.start();
-    this.addLog(`TCP server listening on ${this.config.peer.host}:${this.config.peer.tcpPort}`);
+    this.addLog(
+      `TCP server listening on ${this.config.peer.host}:${this.config.peer.tcpPort}`,
+    );
   }
 
   // Registers this peer with bootstrap so other peers can discover it.
   async registerSelf() {
-    const response = await this.bootstrap.register({
+    const peerData = {
       peerId: this.config.peer.id,
       username: this.config.peer.username,
       host: this.config.peer.host,
       tcpPort: this.config.peer.tcpPort,
       webPort: this.config.peer.webPort,
-      publicKey: null
-    });
+      publicKey: null,
+    };
+    let response;
+    if (this.config.peer.introducerUrl) {
+      response = await this.bootstrap.introduceViaPeer(
+        this.config.peer.introducerUrl,
+        peerData,
+      );
+      this.addLog(
+        `Registered via introducer ${this.config.peer.introducerUrl}`,
+      );
+    } else {
+      response = await this.bootstrap.register(peerData);
+      this.addLog(`Registered with bootstrap ${this.config.bootstrap.url}`);
+    }
     this.peers = response.peers ?? [];
-    this.addLog(`Registered with bootstrap ${this.config.bootstrap.url}`);
     this.emitPeers();
   }
 
@@ -114,7 +156,7 @@ export class PeerRuntime {
     try {
       await this.bootstrap.heartbeat(this.config.peer.id);
     } catch (error) {
-      if (String(error.message).includes('peer not registered')) {
+      if (String(error.message).includes("peer not registered")) {
         await this.registerSelf();
         return;
       }
@@ -133,20 +175,22 @@ export class PeerRuntime {
   async syncGroups() {
     const response = await this.bootstrap.listGroups(this.config.peer.id);
     this.groups = response.groups ?? [];
-    this.io.emit('groups', this.groups);
+    this.io.emit("groups", this.groups);
   }
 
   // Loads saved messages for this peer into the UI state.
   async loadMessageHistory() {
     const response = await this.bootstrap.listMessages(this.config.peer.id);
     this.messages = response.messages ?? [];
-    this.io.emit('messages', this.messages);
+    this.io.emit("messages", this.messages);
   }
 
   // Fetches queued offline messages and marks them delivered.
   async pollOfflineMessages() {
     if (this.churnOffline) return;
-    const response = await this.bootstrap.getOfflineMessages(this.config.peer.id);
+    const response = await this.bootstrap.getOfflineMessages(
+      this.config.peer.id,
+    );
     const records = response.messages ?? [];
     if (!records.length) return;
 
@@ -161,7 +205,9 @@ export class PeerRuntime {
 
   // Returns online peers excluding this peer.
   getOnlinePeers() {
-    return this.peers.filter((peer) => peer.status === 'online' && peer.peerId !== this.config.peer.id);
+    return this.peers.filter(
+      (peer) => peer.status === "online" && peer.peerId !== this.config.peer.id,
+    );
   }
 
   // Finds a peer from cache or bootstrap before sending a message.
@@ -174,16 +220,16 @@ export class PeerRuntime {
 
   // Builds the encrypted payload that will be sent over TCP.
   createWirePayload(type, fields) {
-    const encrypted = maybeEncryptContent(fields.content ?? '', {
+    const encrypted = maybeEncryptContent(fields.content ?? "", {
       enabled: this.config.security.encryptionEnabled,
-      secret: this.config.security.sharedSecret
+      secret: this.config.security.sharedSecret,
     });
 
     return createBasePayload(type, {
       ...fields,
       ...encrypted,
       fromPeerId: this.config.peer.id,
-      fromUsername: this.config.peer.username
+      fromUsername: this.config.peer.username,
     });
   }
 
@@ -198,16 +244,16 @@ export class PeerRuntime {
       groupId: payload.groupId ?? null,
       content,
       encrypted: Boolean(payload.encrypted),
-      status: extra.status ?? 'received',
+      status: extra.status ?? "received",
       createdAt: payload.createdAt ?? nowIso(),
-      ...extra
+      ...extra,
     };
   }
 
   // Handles an inbound TCP payload, including decryption, storage, relay, and UI updates.
   async handleIncomingPayload(payload, context = {}) {
     if (this.churnOffline) {
-      throw new Error('peer is currently offline by churn simulation');
+      throw new Error("peer is currently offline by churn simulation");
     }
 
     // Relay handling: forward the inner payload to its final destination.
@@ -223,11 +269,11 @@ export class PeerRuntime {
 
     const content = maybeDecryptContent(payload, {
       enabled: this.config.security.encryptionEnabled,
-      secret: this.config.security.sharedSecret
+      secret: this.config.security.sharedSecret,
     });
     const message = this.toDisplayMessage(payload, content, {
-      status: context.offline ? 'delivered_from_queue' : 'received',
-      relayedBy: payload.relayedBy ?? null
+      status: context.offline ? "delivered_from_queue" : "received",
+      relayedBy: payload.relayedBy ?? null,
     });
 
     this.messages.push(message);
@@ -240,9 +286,9 @@ export class PeerRuntime {
       await this.safeRun(() => this.bootstrap.saveDirectMessage(message));
     }
 
-    this.io.emit('message', message);
+    this.io.emit("message", message);
     this.emitStats();
-    const via = payload.relayedBy ? ` (relayed via ${payload.relayedBy})` : '';
+    const via = payload.relayedBy ? ` (relayed via ${payload.relayedBy})` : "";
     this.addLog(`Received ${payload.type} from ${payload.fromPeerId}${via}`);
   }
 
@@ -251,26 +297,31 @@ export class PeerRuntime {
     const targetPeerId = relayPayload.relayToPeerId;
     const innerPayload = relayPayload.innerPayload;
     if (!targetPeerId || !innerPayload) {
-      this.addLog('Invalid relay payload received', 'error');
+      this.addLog("Invalid relay payload received", "error");
       return;
     }
 
     const target = await this.resolvePeer(targetPeerId);
-    if (!target || target.status !== 'online') {
-      this.addLog(`Relay target ${targetPeerId} is not available`, 'error');
+    if (!target || target.status !== "online") {
+      this.addLog(`Relay target ${targetPeerId} is not available`, "error");
       return;
     }
 
     innerPayload.relayedBy = this.config.peer.id;
     const result = await sendTcpPayload(target, innerPayload, {
       retries: 1,
-      timeoutMs: this.config.peer.tcpTimeoutMs
+      timeoutMs: this.config.peer.tcpTimeoutMs,
     });
 
     if (result.ok) {
-      this.addLog(`Relayed message ${innerPayload.messageId} from ${innerPayload.fromPeerId} to ${targetPeerId}`);
+      this.addLog(
+        `Relayed message ${innerPayload.messageId} from ${innerPayload.fromPeerId} to ${targetPeerId}`,
+      );
     } else {
-      this.addLog(`Failed to relay message to ${targetPeerId}: ${result.error}`, 'error');
+      this.addLog(
+        `Failed to relay message to ${targetPeerId}: ${result.error}`,
+        "error",
+      );
     }
   }
 
@@ -281,13 +332,17 @@ export class PeerRuntime {
 
     const payload = this.createWirePayload(MESSAGE_TYPES.DIRECT, {
       toPeerId,
-      content
+      content,
     });
-    const localMessage = this.toDisplayMessage(payload, content, { status: 'sending' });
+    const localMessage = this.toDisplayMessage(payload, content, {
+      status: "sending",
+    });
     this.trackOutgoing(localMessage);
 
-    const result = await this.deliverPayload(target, payload, { queueOffline: true });
-    const status = result.ok ? 'delivered' : 'failed_queued';
+    const result = await this.deliverPayload(target, payload, {
+      queueOffline: true,
+    });
+    const status = result.ok ? "delivered" : "failed_queued";
     await this.updateDelivery(localMessage, target.peerId, result, status);
     return { message: localMessage, result };
   }
@@ -295,16 +350,23 @@ export class PeerRuntime {
   // Sends one group message individually to each group member peer.
   async sendGroup(groupId, memberPeerIds, content) {
     const group = this.groups.find((item) => item.groupId === groupId);
-    const members = [...new Set((memberPeerIds?.length ? memberPeerIds : group?.members ?? []).filter(Boolean))]
-      .filter((peerId) => peerId !== this.config.peer.id);
-    if (!members.length) throw new Error('Group has no target members');
+    const members = [
+      ...new Set(
+        (memberPeerIds?.length ? memberPeerIds : (group?.members ?? [])).filter(
+          Boolean,
+        ),
+      ),
+    ].filter((peerId) => peerId !== this.config.peer.id);
+    if (!members.length) throw new Error("Group has no target members");
 
     const payload = this.createWirePayload(MESSAGE_TYPES.GROUP, {
       groupId,
       members,
-      content
+      content,
     });
-    const localMessage = this.toDisplayMessage(payload, content, { status: 'sending' });
+    const localMessage = this.toDisplayMessage(payload, content, {
+      status: "sending",
+    });
     this.trackOutgoing(localMessage);
 
     const results = [];
@@ -312,42 +374,60 @@ export class PeerRuntime {
       const peer = await this.resolvePeer(peerId);
       const result = peer
         ? await this.deliverPayload(peer, payload, { queueOffline: true })
-        : { ok: false, attempts: 0, error: 'peer not found' };
+        : { ok: false, attempts: 0, error: "peer not found" };
       results.push({ peerId, ...result });
-      this.io.emit('delivery', { messageId: payload.messageId, peerId, ...result });
+      this.io.emit("delivery", {
+        messageId: payload.messageId,
+        peerId,
+        ...result,
+      });
     }
 
     const failed = results.filter((result) => !result.ok);
-    const status = failed.length ? (failed.length === results.length ? 'failed_queued' : 'partial') : 'delivered';
+    const status = failed.length
+      ? failed.length === results.length
+        ? "failed_queued"
+        : "partial"
+      : "delivered";
     localMessage.status = status;
     await this.safeRun(() => this.bootstrap.saveGroupMessage(localMessage));
-    this.io.emit('message:update', localMessage);
+    this.io.emit("message:update", localMessage);
     return { message: localMessage, results };
   }
 
   // Sends one message to every online peer in the network.
   async broadcast(content) {
     const targets = this.getOnlinePeers();
-    if (!targets.length) throw new Error('No online peers available for broadcast');
+    if (!targets.length)
+      throw new Error("No online peers available for broadcast");
 
     const payload = this.createWirePayload(MESSAGE_TYPES.BROADCAST, {
-      toPeerId: '*',
-      content
+      toPeerId: "*",
+      content,
     });
-    const localMessage = this.toDisplayMessage(payload, content, { status: 'sending', broadcast: true });
+    const localMessage = this.toDisplayMessage(payload, content, {
+      status: "sending",
+      broadcast: true,
+    });
     this.trackOutgoing(localMessage);
 
     const results = [];
     for (const peer of targets) {
-      const result = await this.deliverPayload(peer, payload, { queueOffline: true });
+      const result = await this.deliverPayload(peer, payload, {
+        queueOffline: true,
+      });
       results.push({ peerId: peer.peerId, ...result });
-      this.io.emit('delivery', { messageId: payload.messageId, peerId: peer.peerId, ...result });
+      this.io.emit("delivery", {
+        messageId: payload.messageId,
+        peerId: peer.peerId,
+        ...result,
+      });
     }
 
     const failed = results.filter((result) => !result.ok);
-    localMessage.status = failed.length ? 'partial' : 'delivered';
+    localMessage.status = failed.length ? "partial" : "delivered";
     await this.safeRun(() => this.bootstrap.saveDirectMessage(localMessage));
-    this.io.emit('message:update', localMessage);
+    this.io.emit("message:update", localMessage);
     return { message: localMessage, results };
   }
 
@@ -355,12 +435,13 @@ export class PeerRuntime {
   async sendFile(toPeerId, file) {
     const target = await this.resolvePeer(toPeerId);
     if (!target) throw new Error(`Peer ${toPeerId} not found`);
-    if (target.status !== 'online') throw new Error(`Peer ${toPeerId} is offline`);
+    if (target.status !== "online")
+      throw new Error(`Peer ${toPeerId} is offline`);
 
     // Save file locally on sender side for preview
     const peerDir = path.join(this.receivedFilesDir, this.config.peer.id);
     await fs.mkdir(peerDir, { recursive: true });
-    const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.-]/g, '_')}`;
+    const safeName = `${Date.now()}_${String(file.originalname).replace(/[^\w.-]/g, "_")}`;
     const savedPath = path.join(peerDir, safeName);
     await fs.writeFile(savedPath, file.buffer);
 
@@ -372,24 +453,30 @@ export class PeerRuntime {
       fileName: file.originalname,
       mimeType: file.mimetype,
       fileSize: file.size,
-      dataBase64: file.buffer.toString('base64')
+      dataBase64: file.buffer.toString("base64"),
     });
 
     // Show file message on sender's chat UI
-    const localMessage = this.toDisplayMessage(payload, `📎 ${file.originalname} (${this.formatFileSize(file.size)})`, {
-      status: 'sending',
-      fileTransfer: true,
-      fileName: file.originalname,
-      fileSize: file.size,
-      mimeType: file.mimetype,
-      fileUrl: `/files/${safeName}`
-    });
+    const localMessage = this.toDisplayMessage(
+      payload,
+      `📎 ${file.originalname} (${this.formatFileSize(file.size)})`,
+      {
+        status: "sending",
+        fileTransfer: true,
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        fileUrl: `/files/${safeName}`,
+      },
+    );
     this.trackOutgoing(localMessage);
 
-    const result = await this.deliverPayload(target, payload, { queueOffline: false });
-    const status = result.ok ? 'delivered' : 'failed';
+    const result = await this.deliverPayload(target, payload, {
+      queueOffline: false,
+    });
+    const status = result.ok ? "delivered" : "failed";
     localMessage.status = status;
-    this.io.emit('message:update', localMessage);
+    this.io.emit("message:update", localMessage);
 
     const fileTransfer = {
       transferId: payload.transferId,
@@ -400,10 +487,12 @@ export class PeerRuntime {
       mimeType: payload.mimeType,
       fileSize: payload.fileSize,
       status,
-      savedPath
+      savedPath,
     };
     await this.safeRun(() => this.bootstrap.saveFileTransfer(fileTransfer));
-    this.addLog(`${result.ok ? 'Sent' : 'Failed to send'} file ${payload.fileName} to ${toPeerId}`);
+    this.addLog(
+      `${result.ok ? "Sent" : "Failed to send"} file ${payload.fileName} to ${toPeerId}`,
+    );
     return { fileTransfer, result };
   }
 
@@ -411,9 +500,9 @@ export class PeerRuntime {
   async receiveFile(payload) {
     const peerDir = path.join(this.receivedFilesDir, this.config.peer.id);
     await fs.mkdir(peerDir, { recursive: true });
-    const safeName = `${Date.now()}_${String(payload.fileName).replace(/[^\w.-]/g, '_')}`;
+    const safeName = `${Date.now()}_${String(payload.fileName).replace(/[^\w.-]/g, "_")}`;
     const savedPath = path.join(peerDir, safeName);
-    await fs.writeFile(savedPath, Buffer.from(payload.dataBase64, 'base64'));
+    await fs.writeFile(savedPath, Buffer.from(payload.dataBase64, "base64"));
 
     const fileTransfer = {
       transferId: payload.transferId,
@@ -423,26 +512,30 @@ export class PeerRuntime {
       fileName: payload.fileName,
       mimeType: payload.mimeType,
       fileSize: payload.fileSize,
-      status: 'received',
-      savedPath
+      status: "received",
+      savedPath,
     };
     await this.safeRun(() => this.bootstrap.saveFileTransfer(fileTransfer));
     this.stats.filesReceived += 1;
 
     // Show file message on receiver's chat UI
-    const message = this.toDisplayMessage(payload, `📎 ${payload.fileName} (${this.formatFileSize(payload.fileSize)})`, {
-      status: 'received',
-      fileTransfer: true,
-      fileName: payload.fileName,
-      fileSize: payload.fileSize,
-      mimeType: payload.mimeType,
-      fileUrl: `/files/${safeName}`
-    });
+    const message = this.toDisplayMessage(
+      payload,
+      `📎 ${payload.fileName} (${this.formatFileSize(payload.fileSize)})`,
+      {
+        status: "received",
+        fileTransfer: true,
+        fileName: payload.fileName,
+        fileSize: payload.fileSize,
+        mimeType: payload.mimeType,
+        fileUrl: `/files/${safeName}`,
+      },
+    );
     this.messages.push(message);
     this.messages = this.messages.slice(-300);
     this.stats.received += 1;
-    this.io.emit('message', message);
-    this.io.emit('file', fileTransfer);
+    this.io.emit("message", message);
+    this.io.emit("file", fileTransfer);
     this.emitStats();
     this.addLog(`Received file ${payload.fileName} from ${payload.fromPeerId}`);
   }
@@ -458,13 +551,18 @@ export class PeerRuntime {
   // Falls back to relay through another online peer if direct delivery fails.
   async deliverPayload(peer, payload, { queueOffline }) {
     this.stats.sent += 1;
-    if (peer.status !== 'online') {
-      return this.queueOrFail(peer.peerId, payload, queueOffline, 'peer offline');
+    if (peer.status !== "online") {
+      return this.queueOrFail(
+        peer.peerId,
+        payload,
+        queueOffline,
+        "peer offline",
+      );
     }
 
     const result = await sendTcpPayload(peer, payload, {
       retries: this.config.peer.sendRetries,
-      timeoutMs: this.config.peer.tcpTimeoutMs
+      timeoutMs: this.config.peer.tcpTimeoutMs,
     });
 
     if (result.ok) {
@@ -474,9 +572,9 @@ export class PeerRuntime {
           messageId: payload.messageId,
           fromPeerId: this.config.peer.id,
           toPeerId: peer.peerId,
-          status: 'delivered',
-          attempts: result.attempts
-        })
+          status: "delivered",
+          attempts: result.attempts,
+        }),
       );
       this.emitStats();
       return result;
@@ -491,35 +589,45 @@ export class PeerRuntime {
           messageId: payload.messageId,
           fromPeerId: this.config.peer.id,
           toPeerId: peer.peerId,
-          status: 'delivered_via_relay',
-          attempts: result.attempts + 1
-        })
+          status: "delivered_via_relay",
+          attempts: result.attempts + 1,
+        }),
       );
       this.emitStats();
       return relayResult;
     }
 
-    return this.queueOrFail(peer.peerId, payload, queueOffline, result.error, result.attempts);
+    return this.queueOrFail(
+      peer.peerId,
+      payload,
+      queueOffline,
+      result.error,
+      result.attempts,
+    );
   }
 
   // Attempts to deliver a payload via an online relay peer.
   async tryRelay(targetPeerId, innerPayload) {
-    const relayPeers = this.getOnlinePeers().filter((p) => p.peerId !== targetPeerId);
+    const relayPeers = this.getOnlinePeers().filter(
+      (p) => p.peerId !== targetPeerId,
+    );
     if (!relayPeers.length) return null;
 
     const relayPayload = createBasePayload(MESSAGE_TYPES.RELAY, {
       fromPeerId: this.config.peer.id,
       relayToPeerId: targetPeerId,
-      innerPayload
+      innerPayload,
     });
 
     for (const relayPeer of relayPeers) {
       const result = await sendTcpPayload(relayPeer, relayPayload, {
         retries: 0,
-        timeoutMs: this.config.peer.tcpTimeoutMs
+        timeoutMs: this.config.peer.tcpTimeoutMs,
       });
       if (result.ok) {
-        this.addLog(`Message ${innerPayload.messageId} relayed via ${relayPeer.peerId} to ${targetPeerId}`);
+        this.addLog(
+          `Message ${innerPayload.messageId} relayed via ${relayPeer.peerId} to ${targetPeerId}`,
+        );
         return { ok: true, attempts: 1, relayedVia: relayPeer.peerId };
       }
     }
@@ -532,19 +640,21 @@ export class PeerRuntime {
     if (queueOffline) {
       await this.bootstrap.storeOfflineMessage(targetPeerId, payload);
       this.stats.queuedOffline += 1;
-      this.addLog(`Queued message ${payload.messageId} for offline peer ${targetPeerId}`);
+      this.addLog(
+        `Queued message ${payload.messageId} for offline peer ${targetPeerId}`,
+      );
     } else {
-      this.addLog(`Delivery failed for ${targetPeerId}: ${error}`, 'error');
+      this.addLog(`Delivery failed for ${targetPeerId}: ${error}`, "error");
     }
     await this.safeRun(() =>
       this.bootstrap.saveAck({
         messageId: payload.messageId,
         fromPeerId: this.config.peer.id,
         toPeerId: targetPeerId,
-        status: queueOffline ? 'queued_offline' : 'failed',
+        status: queueOffline ? "queued_offline" : "failed",
         attempts,
-        errorMessage: error
-      })
+        errorMessage: error,
+      }),
     );
     this.emitStats();
     return { ok: false, attempts, error, queuedOffline: queueOffline };
@@ -554,7 +664,7 @@ export class PeerRuntime {
   trackOutgoing(message) {
     this.messages.push(message);
     this.messages = this.messages.slice(-300);
-    this.io.emit('message', message);
+    this.io.emit("message", message);
     this.emitStats();
   }
 
@@ -562,8 +672,12 @@ export class PeerRuntime {
   async updateDelivery(localMessage, targetPeerId, result, status) {
     localMessage.status = status;
     await this.safeRun(() => this.bootstrap.saveDirectMessage(localMessage));
-    this.io.emit('message:update', localMessage);
-    this.io.emit('delivery', { messageId: localMessage.messageId, peerId: targetPeerId, ...result });
+    this.io.emit("message:update", localMessage);
+    this.io.emit("delivery", {
+      messageId: localMessage.messageId,
+      peerId: targetPeerId,
+      ...result,
+    });
   }
 
   // Creates a new chat group through bootstrap metadata APIs.
@@ -571,7 +685,7 @@ export class PeerRuntime {
     const response = await this.bootstrap.createGroup({
       name,
       ownerPeerId: this.config.peer.id,
-      members
+      members,
     });
     await this.syncGroups();
     return response.group;
@@ -587,7 +701,10 @@ export class PeerRuntime {
   // Starts simulated peer leave/rejoin behavior.
   startChurn(intervalMs = 7000) {
     if (this.churnTimer) return { running: true };
-    this.churnTimer = setInterval(() => this.safeRun(() => this.toggleChurnState()), intervalMs);
+    this.churnTimer = setInterval(
+      () => this.safeRun(() => this.toggleChurnState()),
+      intervalMs,
+    );
     this.addLog(`Churn simulation started, interval ${intervalMs}ms`);
     return { running: true, intervalMs };
   }
@@ -606,44 +723,45 @@ export class PeerRuntime {
       await this.startTcpServer();
       this.churnOffline = false;
       await this.registerSelf();
-      this.addLog('Churn: peer re-joined network');
+      this.addLog("Churn: peer re-joined network");
     } else {
       this.churnOffline = true;
       await this.bootstrap.unregister(this.config.peer.id);
       await this.tcpServer.stop();
-      this.addLog('Churn: peer left network');
+      this.addLog("Churn: peer left network");
     }
     this.emitState();
   }
 
   // Adds a runtime log entry and pushes it to the Web UI.
-  addLog(message, level = 'info') {
+  addLog(message, level = "info") {
     const record = {
       id: randomUUID(),
       level,
       message,
-      createdAt: nowIso()
+      createdAt: nowIso(),
     };
     this.logs.unshift(record);
     this.logs = this.logs.slice(0, 150);
-    this.io.emit('log', record);
-    if (level === 'error') console.error(`[peer:${this.config.peer.id}] ${message}`);
+    this.io.emit("log", record);
+    if (level === "error")
+      console.error(`[peer:${this.config.peer.id}] ${message}`);
     else console.log(`[peer:${this.config.peer.id}] ${message}`);
   }
 
   // Pushes the latest peer list to connected browsers.
   emitPeers() {
-    this.io.emit('peers', this.peers);
+    this.io.emit("peers", this.peers);
   }
 
   // Pushes delivery statistics to connected browsers.
   emitStats() {
-    this.io.emit('stats', this.stats);
+    this.io.emit("stats", this.stats);
   }
 
   // Pushes a full runtime snapshot to newly connected browsers.
   emitState() {
-    this.io.emit('state', {
+    this.io.emit("state", {
       self: this.self,
       peers: this.peers,
       groups: this.groups,
@@ -651,7 +769,7 @@ export class PeerRuntime {
       logs: this.logs,
       messages: this.messages,
       encryptionEnabled: this.config.security.encryptionEnabled,
-      churnRunning: Boolean(this.churnTimer)
+      churnRunning: Boolean(this.churnTimer),
     });
   }
 }
