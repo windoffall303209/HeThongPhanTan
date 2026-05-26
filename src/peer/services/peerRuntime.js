@@ -64,11 +64,17 @@ export class PeerRuntime {
   async start() {
     await fs.mkdir(this.receivedFilesDir, { recursive: true });
     await this.startTcpServer();
+<<<<<<< HEAD
     await this.safeRun(() => this.registerSelf());
     await this.safeRun(() => this.syncPeers());
     await this.safeRun(() => this.syncGroups());
     await this.safeRun(() => this.loadMessageHistory());
     await this.safeRun(() => this.pollOfflineMessages());
+=======
+    await this.registerSelf();
+    await this.consolidatedSync();
+    await this.loadMessageHistory();
+>>>>>>> 4dd60f9d9b148d3bc7f9ba0ecc84290ac67d9476
 
     this.timers.push(
       setInterval(
@@ -78,20 +84,8 @@ export class PeerRuntime {
     );
     this.timers.push(
       setInterval(
-        () => this.safeRun(() => this.syncPeers()),
+        () => this.safeRun(() => this.consolidatedSync()),
         this.config.peer.peerSyncIntervalMs,
-      ),
-    );
-    this.timers.push(
-      setInterval(
-        () => this.safeRun(() => this.syncGroups()),
-        this.config.peer.peerSyncIntervalMs,
-      ),
-    );
-    this.timers.push(
-      setInterval(
-        () => this.safeRun(() => this.pollOfflineMessages()),
-        this.config.peer.offlinePollIntervalMs,
       ),
     );
     this.started = true;
@@ -165,18 +159,44 @@ export class PeerRuntime {
     }
   }
 
+  // Performs a single consolidated synchronization request with the bootstrap server.
+  async consolidatedSync() {
+    if (this.churnOffline) return;
+    try {
+      const response = await this.bootstrap.sync(this.config.peer.id);
+      
+      // 1. Sync peers list
+      this.peers = response.peers ?? [];
+      this.emitPeers();
+
+      // 2. Sync groups list
+      this.groups = response.groups ?? [];
+      this.io.emit("groups", this.groups);
+
+      // 3. Process pending offline messages
+      const records = response.offlineMessages ?? [];
+      if (records.length > 0) {
+        const delivered = [];
+        for (const record of records) {
+          await this.handleIncomingPayload(record.message, { offline: true });
+          delivered.push(record.id);
+        }
+        await this.bootstrap.ackOfflineMessages(delivered);
+        this.addLog(`Delivered ${delivered.length} offline message(s)`);
+      }
+    } catch (error) {
+      this.addLog(`Consolidated sync failed: ${error.message}`, "error");
+    }
+  }
+
   // Pulls the latest peer list from bootstrap for UI and routing.
   async syncPeers() {
-    const response = await this.bootstrap.listPeers();
-    this.peers = response.peers ?? [];
-    this.emitPeers();
+    await this.consolidatedSync();
   }
 
   // Pulls groups that include this peer from bootstrap.
   async syncGroups() {
-    const response = await this.bootstrap.listGroups(this.config.peer.id);
-    this.groups = response.groups ?? [];
-    this.io.emit("groups", this.groups);
+    await this.consolidatedSync();
   }
 
   // Loads saved messages for this peer into the UI state.
@@ -188,20 +208,7 @@ export class PeerRuntime {
 
   // Fetches queued offline messages and marks them delivered.
   async pollOfflineMessages() {
-    if (this.churnOffline) return;
-    const response = await this.bootstrap.getOfflineMessages(
-      this.config.peer.id,
-    );
-    const records = response.messages ?? [];
-    if (!records.length) return;
-
-    const delivered = [];
-    for (const record of records) {
-      await this.handleIncomingPayload(record.message, { offline: true });
-      delivered.push(record.id);
-    }
-    await this.bootstrap.ackOfflineMessages(delivered);
-    this.addLog(`Delivered ${delivered.length} offline message(s)`);
+    await this.consolidatedSync();
   }
 
   // Returns online peers excluding this peer.

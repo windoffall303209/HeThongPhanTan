@@ -73,6 +73,23 @@ export function registerRoutes(app, { store, launcher, config }) {
     }
   });
 
+  app.get('/api/peer/sync', async (req, res, next) => {
+    try {
+      const { peerId } = req.query;
+      if (!peerId) return res.status(400).json({ error: 'peerId is required' });
+
+      const [peers, groups, offlineMessages] = await Promise.all([
+        store.listPeers(config.bootstrap.peerTtlMs),
+        store.listGroups(peerId),
+        store.getOfflineMessages(peerId)
+      ]);
+
+      res.json({ peers, groups, offlineMessages });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ── Groups ─────────────────────────────────────────────────────
 
   app.post('/api/groups', async (req, res, next) => {
