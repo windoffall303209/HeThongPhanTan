@@ -40,6 +40,13 @@ export class BootstrapClient {
     return requestJson(this.url("/api/peers"));
   }
 
+  // Consolidates peers, groups, and offline messages sync in a single call.
+  sync(peerId) {
+    return requestJson(
+      this.url(`/api/peer/sync?peerId=${encodeURIComponent(peerId)}`),
+    );
+  }
+
   // Fetches one peer by id for direct routing.
   getPeer(peerId) {
     return requestJson(this.url(`/api/peers/${encodeURIComponent(peerId)}`));
