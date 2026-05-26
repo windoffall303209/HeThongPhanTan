@@ -138,6 +138,23 @@
       </aside>
     </div>
 
+    <!-- Modal: Forward Message -->
+    <div id="modal-forward" class="modal-overlay" style="display:none">
+      <div class="modal-box">
+        <div class="modal-head"><h3>Chuyển tiếp tin nhắn</h3><button class="modal-close" data-modal="modal-forward">✕</button></div>
+        <div class="modal-body">
+          <p class="modal-desc">Chọn peer đích để gửi lại nội dung tin nhắn đã chọn.</p>
+          <label class="form-label">Peer nhận</label>
+          <select id="forward-peer-select" class="form-input"></select>
+          <input type="hidden" id="forward-message-id" />
+        </div>
+        <div class="modal-foot">
+          <button class="btn-modal-cancel" data-modal="modal-forward">Hủy</button>
+          <button id="confirm-forward-send" class="btn-modal-ok">Chuyển tiếp</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Create Group -->
     <div id="modal-create-group" class="modal-overlay" style="display:none">
       <div class="modal-box">

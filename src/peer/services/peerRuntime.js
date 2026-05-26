@@ -64,17 +64,9 @@ export class PeerRuntime {
   async start() {
     await fs.mkdir(this.receivedFilesDir, { recursive: true });
     await this.startTcpServer();
-<<<<<<< HEAD
     await this.safeRun(() => this.registerSelf());
-    await this.safeRun(() => this.syncPeers());
-    await this.safeRun(() => this.syncGroups());
+    await this.safeRun(() => this.consolidatedSync());
     await this.safeRun(() => this.loadMessageHistory());
-    await this.safeRun(() => this.pollOfflineMessages());
-=======
-    await this.registerSelf();
-    await this.consolidatedSync();
-    await this.loadMessageHistory();
->>>>>>> 4dd60f9d9b148d3bc7f9ba0ecc84290ac67d9476
 
     this.timers.push(
       setInterval(
@@ -324,6 +316,8 @@ export class PeerRuntime {
     const message = this.toDisplayMessage(payload, content, {
       status: context.offline ? "delivered_from_queue" : "received",
       relayedBy: payload.relayedBy ?? null,
+      forwardedFromMessageId: payload.forwardedFromMessageId ?? null,
+      originalFromPeerId: payload.originalFromPeerId ?? null,
     });
 
     this.upsertLocalMessage(message);
@@ -389,6 +383,96 @@ export class PeerRuntime {
     const status = result.ok ? "delivered" : "failed_queued";
     await this.updateDelivery(localMessage, target.peerId, result, status);
     return { message: localMessage, result };
+  }
+
+  // Sends one direct message through a chosen relay peer.
+  async sendViaRelay(relayPeerId, toPeerId, content) {
+    if (relayPeerId === toPeerId) {
+      throw new Error("Relay peer must be different from target peer");
+    }
+    const relayPeer = await this.resolvePeer(relayPeerId);
+    if (!relayPeer) throw new Error(`Relay peer ${relayPeerId} not found`);
+    if (relayPeer.status !== "online") {
+      throw new Error(`Relay peer ${relayPeerId} is offline`);
+    }
+
+    const payload = this.createWirePayload(MESSAGE_TYPES.DIRECT, {
+      toPeerId,
+      content,
+    });
+    const localMessage = this.toDisplayMessage(payload, content, {
+      status: "sending",
+      relayedBy: relayPeerId,
+    });
+    this.trackOutgoing(localMessage);
+
+    this.stats.sent += 1;
+    const relayPayload = createBasePayload(MESSAGE_TYPES.RELAY, {
+      fromPeerId: this.config.peer.id,
+      relayToPeerId: toPeerId,
+      innerPayload: payload,
+    });
+    const result = await sendTcpPayload(relayPeer, relayPayload, {
+      retries: this.config.peer.sendRetries,
+      timeoutMs: this.config.peer.tcpTimeoutMs,
+    });
+
+    localMessage.status = result.ok ? "delivered_via_relay" : "failed";
+    if (result.ok) this.stats.delivered += 1;
+    else this.stats.failed += 1;
+    await this.safeRun(() => this.bootstrap.saveAck({
+      messageId: payload.messageId,
+      fromPeerId: this.config.peer.id,
+      toPeerId,
+      status: localMessage.status,
+      attempts: result.attempts,
+      errorMessage: result.error ?? null,
+    }));
+    await this.safeRun(() => this.bootstrap.saveDirectMessage(localMessage));
+    this.emitStats();
+    this.io.emit("message:update", localMessage);
+    this.io.emit("delivery", {
+      messageId: payload.messageId,
+      peerId: toPeerId,
+      relayPeerId,
+      ...result,
+    });
+    return { message: localMessage, result: { ...result, relayPeerId } };
+  }
+
+  // Forwards an existing local message as a new direct P2P message.
+  async forwardMessage(messageId, toPeerId) {
+    const original = this.messages.find((message) => message.messageId === messageId);
+    if (!original) throw new Error(`Message ${messageId} not found in local history`);
+    if (original.fileTransfer) {
+      throw new Error("File messages cannot be forwarded yet");
+    }
+    const content = String(original.content ?? "").trim();
+    if (!content) throw new Error("Message has no text content to forward");
+
+    const target = await this.resolvePeer(toPeerId);
+    if (!target) throw new Error(`Peer ${toPeerId} not found`);
+
+    const payload = this.createWirePayload(MESSAGE_TYPES.DIRECT, {
+      toPeerId,
+      content,
+      forwardedFromMessageId: original.messageId,
+      originalFromPeerId: original.originalFromPeerId ?? original.fromPeerId,
+    });
+    const localMessage = this.toDisplayMessage(payload, content, {
+      status: "sending",
+      forwardedFromMessageId: original.messageId,
+      originalFromPeerId: original.originalFromPeerId ?? original.fromPeerId,
+    });
+    this.trackOutgoing(localMessage);
+
+    const result = await this.deliverPayload(target, payload, {
+      queueOffline: true,
+    });
+    const status = result.ok ? "delivered" : "failed_queued";
+    await this.updateDelivery(localMessage, target.peerId, result, status);
+    this.addLog(`Forwarded message ${messageId} to ${toPeerId}`);
+    return { message: localMessage, result, original };
   }
 
   // Sends one group message individually to each group member peer.

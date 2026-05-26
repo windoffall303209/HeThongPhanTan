@@ -603,6 +603,27 @@ textarea::placeholder {
   justify-content: flex-end;
 }
 
+.bubble-forward-btn {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 2px;
+}
+
+.bubble-forward-btn:hover {
+  text-decoration: underline;
+}
+
+.forward-note {
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .bubble-body {
   padding: 9px 14px;
   font-size: 13px;

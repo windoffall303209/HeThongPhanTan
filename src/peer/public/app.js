@@ -13,6 +13,7 @@ const state = {
 let activeChat = null; // { type: 'direct'|'group'|'broadcast', id }
 let activeTab = "direct"; // 'direct' | 'group'
 let churnRunning = false;
+let selectedForwardMessageId = null;
 
 // ── Utilities ──────────────────────────────────────────────
 function esc(v) {
@@ -40,7 +41,12 @@ async function api(path, options = {}) {
     ...options,
     headers: { "content-type": "application/json", ...(options.headers ?? {}) },
   });
-  const body = await res.json();
+  const contentType = res.headers.get("content-type") ?? "";
+  const body = contentType.includes("application/json")
+    ? await res.json()
+    : {
+        error: `${res.status} ${res.statusText}: server returned ${contentType || "non-JSON response"}`,
+      };
   if (!res.ok) throw new Error(body.error ?? "Request failed");
   return body;
 }
@@ -252,6 +258,12 @@ function renderFileBody(m) {
 function createMessageElement(m) {
   const isSelf = m.fromPeerId === selfPeerId;
   const relay = m.relayedBy ? ` · via ${m.relayedBy}` : "";
+  const forwarded = m.forwardedFromMessageId
+    ? `<div class="forward-note">Forwarded from ${esc(m.originalFromPeerId ?? "unknown")}</div>`
+    : "";
+  const forwardAction = m.fileTransfer
+    ? ""
+    : `<button type="button" class="bubble-forward-btn" data-message-id="${esc(m.messageId)}">Chuyen tiep</button>`;
   const who = m.groupId
     ? `${m.fromPeerId} → ${m.groupId.slice(0, 8)}`
     : `${m.fromPeerId} → ${m.toPeerId}`;
@@ -262,8 +274,8 @@ function createMessageElement(m) {
   div.className = `bubble ${isSelf ? "self" : "other"}`;
   div.setAttribute("data-id", m.messageId);
   div.innerHTML = `
-    <div class="bubble-meta"><span>${esc(who)}${esc(relay)}</span><span class="badge ${esc(m.status)}">${esc(m.status)}</span><span>${fmtTime(m.createdAt)}</span></div>
-    <div class="bubble-body${m.fileTransfer ? " bubble-file" : ""}">${body}</div>
+    <div class="bubble-meta"><span>${esc(who)}${esc(relay)}</span><span class="badge ${esc(m.status)}">${esc(m.status)}</span><span>${fmtTime(m.createdAt)}</span>${forwardAction}</div>
+    <div class="bubble-body${m.fileTransfer ? " bubble-file" : ""}">${forwarded}${body}</div>
   `;
   return div;
 }
@@ -431,56 +443,14 @@ socket.on("messages", (messages) => {
   renderMessages();
 });
 socket.on("message", (msg) => {
-<<<<<<< HEAD
   upsertMessage(msg);
   renderMessages();
-=======
-  // Deduplicate: skip if this messageId already exists in state.
-  if (msg.messageId && state.messages.some((m) => m.messageId === msg.messageId)) return;
-  state.messages.push(msg);
-
-  if (isMessageInActiveChat(msg)) {
-    const list = document.querySelector("#message-list");
-    if (list) {
-      const emptyBubble = list.querySelector(".bubble-empty");
-      if (emptyBubble) emptyBubble.remove();
-      list.appendChild(createMessageElement(msg));
-      scrollBottom();
-    }
-  }
-
->>>>>>> 4dd60f9d9b148d3bc7f9ba0ecc84290ac67d9476
   if (msg.fromPeerId !== selfPeerId)
     showToast(`Tin nhắn từ ${msg.fromPeerId}`, "success");
 });
 socket.on("message:update", (msg) => {
-<<<<<<< HEAD
   upsertMessage(msg);
   renderMessages();
-=======
-  const i = state.messages.findIndex((m) => m.messageId === msg.messageId);
-  if (i >= 0) state.messages[i] = msg;
-  else state.messages.push(msg);
-
-  if (isMessageInActiveChat(msg)) {
-    const el = document.querySelector(`#message-list .bubble[data-id="${CSS.escape(msg.messageId)}"]`);
-    if (el) {
-      const badge = el.querySelector(".badge");
-      if (badge) {
-        badge.className = `badge ${esc(msg.status)}`;
-        badge.textContent = msg.status;
-      }
-    } else {
-      const list = document.querySelector("#message-list");
-      if (list) {
-        const emptyBubble = list.querySelector(".bubble-empty");
-        if (emptyBubble) emptyBubble.remove();
-        list.appendChild(createMessageElement(msg));
-        scrollBottom();
-      }
-    }
-  }
->>>>>>> 4dd60f9d9b148d3bc7f9ba0ecc84290ac67d9476
 });
 socket.on("log", (log) => {
   state.logs.unshift(log);
@@ -541,6 +511,32 @@ document.querySelector("#file-input").addEventListener("change", (e) => {
 document.querySelector("#clear-file-btn").addEventListener("click", () => {
   document.querySelector("#file-input").value = "";
   document.querySelector("#file-chip").style.display = "none";
+});
+
+function populateForwardSelect(messageId) {
+  const select = document.querySelector("#forward-peer-select");
+  const message = state.messages.find((item) => item.messageId === messageId);
+  const candidates = otherPeers();
+  select.innerHTML = candidates.length
+    ? candidates
+        .map((peer) => {
+          const suffix = peer.status === "online" ? "" : " - offline";
+          return `<option value="${esc(peer.peerId)}">${esc(peer.username)} (${esc(peer.peerId)}${suffix})</option>`;
+        })
+        .join("")
+    : '<option value="">Khong co peer nao de chuyen tiep</option>';
+  select.disabled = !candidates.length;
+  document.querySelector("#confirm-forward-send").disabled =
+    !candidates.length || !message;
+}
+
+document.querySelector("#message-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".bubble-forward-btn");
+  if (!btn) return;
+  selectedForwardMessageId = btn.dataset.messageId;
+  document.querySelector("#forward-message-id").value = selectedForwardMessageId;
+  populateForwardSelect(selectedForwardMessageId);
+  openModal("modal-forward");
 });
 
 // ── Composers ───────────────────────────────────────────────
@@ -614,6 +610,27 @@ document
         body: JSON.stringify({ content: input.value }),
       });
       input.value = "";
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  });
+
+document
+  .querySelector("#confirm-forward-send")
+  .addEventListener("click", async () => {
+    const messageId =
+      document.querySelector("#forward-message-id").value ||
+      selectedForwardMessageId;
+    const toPeerId = document.querySelector("#forward-peer-select").value;
+    if (!messageId || !toPeerId) return;
+    try {
+      await api("/messages/forward", {
+        method: "POST",
+        body: JSON.stringify({ messageId, toPeerId }),
+      });
+      closeModal("modal-forward");
+      selectedForwardMessageId = null;
+      showToast(`Da chuyen tiep den ${toPeerId}`, "success");
     } catch (err) {
       showToast(err.message, "error");
     }

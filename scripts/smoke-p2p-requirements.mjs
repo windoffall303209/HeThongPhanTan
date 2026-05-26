@@ -169,14 +169,29 @@ async function main() {
   await waitForOnlinePeers(["peer-a", "peer-b", "peer-c"]);
 
   console.log("Checking direct TCP chat...");
-  await postJson(`${peerAUrl}/api/messages/direct`, {
+  const directResponse = await postJson(`${peerAUrl}/api/messages/direct`, {
     toPeerId: "peer-b",
     content: "smoke direct message",
   });
-  await waitForMessage(
+  const receivedDirect = await waitForMessage(
     peerBUrl,
     (message) => message.fromPeerId === "peer-a" && message.content === "smoke direct message",
     "direct message at peer-b",
+  );
+
+  console.log("Checking user-level message forwarding...");
+  await postJson(`${peerBUrl}/api/messages/forward`, {
+    messageId: receivedDirect.messageId,
+    toPeerId: "peer-c",
+  });
+  await waitForMessage(
+    peerCUrl,
+    (message) => message.fromPeerId === "peer-b"
+      && message.toPeerId === "peer-c"
+      && message.content === "smoke direct message"
+      && message.forwardedFromMessageId === directResponse.message.messageId
+      && message.originalFromPeerId === "peer-a",
+    "forwarded existing message at peer-c",
   );
 
   console.log("Checking group chat fan-out...");
@@ -197,6 +212,21 @@ async function main() {
     peerCUrl,
     (message) => message.groupId === group.groupId && message.content === "smoke group message",
     "group message at peer-c",
+  );
+
+  console.log("Checking explicit relay forwarding...");
+  await postJson(`${peerAUrl}/api/messages/relay`, {
+    relayPeerId: "peer-b",
+    toPeerId: "peer-c",
+    content: "smoke relay message",
+  });
+  await waitForMessage(
+    peerCUrl,
+    (message) => message.fromPeerId === "peer-a"
+      && message.toPeerId === "peer-c"
+      && message.content === "smoke relay message"
+      && message.relayedBy === "peer-b",
+    "relay message at peer-c via peer-b",
   );
 
   console.log("Checking broadcast to online peers...");

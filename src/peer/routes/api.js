@@ -47,6 +47,36 @@ export function createPeerApi(runtime, config) {
     }
   });
 
+  router.post("/messages/relay", async (req, res, next) => {
+    try {
+      const { relayPeerId, toPeerId, content } = req.body;
+      if (!relayPeerId || !toPeerId || !content) {
+        return res
+          .status(400)
+          .json({ error: "relayPeerId, toPeerId, and content are required" });
+      }
+      const result = await runtime.sendViaRelay(relayPeerId, toPeerId, content);
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/messages/forward", async (req, res, next) => {
+    try {
+      const { messageId, toPeerId } = req.body;
+      if (!messageId || !toPeerId) {
+        return res
+          .status(400)
+          .json({ error: "messageId and toPeerId are required" });
+      }
+      const result = await runtime.forwardMessage(messageId, toPeerId);
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/messages/group", async (req, res, next) => {
     try {
       const { groupId, members, content } = req.body;
@@ -181,6 +211,12 @@ export function createPeerApi(runtime, config) {
     } catch (error) {
       next(error);
     }
+  });
+
+  router.use((req, res) => {
+    res.status(404).json({
+      error: `API route not found: ${req.method} ${req.originalUrl}`,
+    });
   });
 
   router.use((error, _req, res, _next) => {
