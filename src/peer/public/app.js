@@ -208,6 +208,45 @@ function renderFileBody(m) {
   return `<div class="file-preview file-generic"><span class="file-icon">📄</span>${dl}</div>`;
 }
 
+function createMessageElement(m) {
+  const isSelf = m.fromPeerId === selfPeerId;
+  const relay = m.relayedBy ? ` · via ${m.relayedBy}` : "";
+  const who = m.groupId
+    ? `${m.fromPeerId} → ${m.groupId.slice(0, 8)}`
+    : `${m.fromPeerId} → ${m.toPeerId}`;
+  const body =
+    m.fileTransfer && m.fileUrl ? renderFileBody(m) : esc(m.content);
+
+  const div = document.createElement("div");
+  div.className = `bubble ${isSelf ? "self" : "other"}`;
+  div.setAttribute("data-id", m.messageId);
+  div.innerHTML = `
+    <div class="bubble-meta"><span>${esc(who)}${esc(relay)}</span><span class="badge ${esc(m.status)}">${esc(m.status)}</span><span>${fmtTime(m.createdAt)}</span></div>
+    <div class="bubble-body${m.fileTransfer ? " bubble-file" : ""}">${body}</div>
+  `;
+  return div;
+}
+
+function isMessageInActiveChat(m) {
+  if (!activeChat) return false;
+  if (activeChat.type === "direct") {
+    return (
+      !m.groupId &&
+      m.toPeerId !== "*" &&
+      !m.broadcast &&
+      ((m.fromPeerId === activeChat.id && m.toPeerId === selfPeerId) ||
+        (m.fromPeerId === selfPeerId && m.toPeerId === activeChat.id))
+    );
+  }
+  if (activeChat.type === "group") {
+    return m.groupId === activeChat.id;
+  }
+  if (activeChat.type === "broadcast") {
+    return m.toPeerId === "*" || m.broadcast;
+  }
+  return false;
+}
+
 function renderMessages() {
   const list = document.querySelector("#message-list");
   if (!list) return;
@@ -216,21 +255,10 @@ function renderMessages() {
     list.innerHTML = '<div class="bubble-empty">Chưa có tin nhắn nào.</div>';
     return;
   }
-  list.innerHTML = msgs
-    .map((m) => {
-      const isSelf = m.fromPeerId === selfPeerId;
-      const relay = m.relayedBy ? ` · via ${m.relayedBy}` : "";
-      const who = m.groupId
-        ? `${m.fromPeerId} → ${m.groupId.slice(0, 8)}`
-        : `${m.fromPeerId} → ${m.toPeerId}`;
-      const body =
-        m.fileTransfer && m.fileUrl ? renderFileBody(m) : esc(m.content);
-      return `<div class="bubble ${isSelf ? "self" : "other"}" data-id="${esc(m.messageId)}">
-      <div class="bubble-meta"><span>${esc(who)}${esc(relay)}</span><span class="badge ${esc(m.status)}">${esc(m.status)}</span><span>${fmtTime(m.createdAt)}</span></div>
-      <div class="bubble-body${m.fileTransfer ? " bubble-file" : ""}">${body}</div>
-    </div>`;
-    })
-    .join("");
+  list.innerHTML = "";
+  msgs.forEach((m) => {
+    list.appendChild(createMessageElement(m));
+  });
   scrollBottom();
 }
 
@@ -364,7 +392,17 @@ socket.on("message", (msg) => {
   // Deduplicate: skip if this messageId already exists in state.
   if (msg.messageId && state.messages.some((m) => m.messageId === msg.messageId)) return;
   state.messages.push(msg);
-  renderMessages();
+
+  if (isMessageInActiveChat(msg)) {
+    const list = document.querySelector("#message-list");
+    if (list) {
+      const emptyBubble = list.querySelector(".bubble-empty");
+      if (emptyBubble) emptyBubble.remove();
+      list.appendChild(createMessageElement(msg));
+      scrollBottom();
+    }
+  }
+
   if (msg.fromPeerId !== selfPeerId)
     showToast(`Tin nhắn từ ${msg.fromPeerId}`, "success");
 });
@@ -372,7 +410,25 @@ socket.on("message:update", (msg) => {
   const i = state.messages.findIndex((m) => m.messageId === msg.messageId);
   if (i >= 0) state.messages[i] = msg;
   else state.messages.push(msg);
-  renderMessages();
+
+  if (isMessageInActiveChat(msg)) {
+    const el = document.querySelector(`#message-list .bubble[data-id="${CSS.escape(msg.messageId)}"]`);
+    if (el) {
+      const badge = el.querySelector(".badge");
+      if (badge) {
+        badge.className = `badge ${esc(msg.status)}`;
+        badge.textContent = msg.status;
+      }
+    } else {
+      const list = document.querySelector("#message-list");
+      if (list) {
+        const emptyBubble = list.querySelector(".bubble-empty");
+        if (emptyBubble) emptyBubble.remove();
+        list.appendChild(createMessageElement(msg));
+        scrollBottom();
+      }
+    }
+  }
 });
 socket.on("log", (log) => {
   state.logs.unshift(log);
