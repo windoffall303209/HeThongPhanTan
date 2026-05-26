@@ -64,11 +64,11 @@ export class PeerRuntime {
   async start() {
     await fs.mkdir(this.receivedFilesDir, { recursive: true });
     await this.startTcpServer();
-    await this.registerSelf();
-    await this.syncPeers();
-    await this.syncGroups();
-    await this.loadMessageHistory();
-    await this.pollOfflineMessages();
+    await this.safeRun(() => this.registerSelf());
+    await this.safeRun(() => this.syncPeers());
+    await this.safeRun(() => this.syncGroups());
+    await this.safeRun(() => this.loadMessageHistory());
+    await this.safeRun(() => this.pollOfflineMessages());
 
     this.timers.push(
       setInterval(
@@ -214,9 +214,28 @@ export class PeerRuntime {
   // Finds a peer from cache or bootstrap before sending a message.
   async resolvePeer(peerId) {
     const cached = this.peers.find((peer) => peer.peerId === peerId);
-    if (cached) return cached;
-    const response = await this.bootstrap.getPeer(peerId);
-    return response.peer;
+    if (cached?.status === "online") return cached;
+
+    let response;
+    try {
+      response = await this.bootstrap.getPeer(peerId);
+    } catch (error) {
+      if (cached) {
+        this.addLog(
+          `Using cached peer ${peerId}; bootstrap lookup failed: ${error.message}`,
+          "error",
+        );
+        return cached;
+      }
+      throw error;
+    }
+    if (response.peer) {
+      const index = this.peers.findIndex((peer) => peer.peerId === peerId);
+      if (index >= 0) this.peers[index] = response.peer;
+      else this.peers.push(response.peer);
+      this.emitPeers();
+    }
+    return response.peer ?? cached;
   }
 
   // Builds the encrypted payload that will be sent over TCP.
@@ -249,6 +268,16 @@ export class PeerRuntime {
       createdAt: payload.createdAt ?? nowIso(),
       ...extra,
     };
+  }
+
+  // Keeps one local UI record per logical message id.
+  upsertLocalMessage(message) {
+    const index = message.messageId
+      ? this.messages.findIndex((item) => item.messageId === message.messageId)
+      : -1;
+    if (index >= 0) this.messages[index] = { ...this.messages[index], ...message };
+    else this.messages.push(message);
+    this.messages = this.messages.slice(-300);
   }
 
   // Handles an inbound TCP payload, including decryption, storage, relay, and UI updates.
@@ -290,8 +319,7 @@ export class PeerRuntime {
       relayedBy: payload.relayedBy ?? null,
     });
 
-    this.messages.push(message);
-    this.messages = this.messages.slice(-300);
+    this.upsertLocalMessage(message);
     this.stats.received += 1;
 
     if (payload.type === MESSAGE_TYPES.GROUP) {
@@ -311,14 +339,12 @@ export class PeerRuntime {
     const targetPeerId = relayPayload.relayToPeerId;
     const innerPayload = relayPayload.innerPayload;
     if (!targetPeerId || !innerPayload) {
-      this.addLog("Invalid relay payload received", "error");
-      return;
+      throw new Error("Invalid relay payload received");
     }
 
     const target = await this.resolvePeer(targetPeerId);
     if (!target || target.status !== "online") {
-      this.addLog(`Relay target ${targetPeerId} is not available`, "error");
-      return;
+      throw new Error(`Relay target ${targetPeerId} is not available`);
     }
 
     innerPayload.relayedBy = this.config.peer.id;
@@ -332,10 +358,7 @@ export class PeerRuntime {
         `Relayed message ${innerPayload.messageId} from ${innerPayload.fromPeerId} to ${targetPeerId}`,
       );
     } else {
-      this.addLog(
-        `Failed to relay message to ${targetPeerId}: ${result.error}`,
-        "error",
-      );
+      throw new Error(`Failed to relay message to ${targetPeerId}: ${result.error}`);
     }
   }
 
@@ -411,6 +434,7 @@ export class PeerRuntime {
 
   // Sends one message to every online peer in the network.
   async broadcast(content) {
+    await this.safeRun(() => this.syncPeers());
     const targets = this.getOnlinePeers();
     if (!targets.length)
       throw new Error("No online peers available for broadcast");
@@ -543,8 +567,7 @@ export class PeerRuntime {
         fileUrl: `/files/${safeName}`,
       },
     );
-    this.messages.push(message);
-    this.messages = this.messages.slice(-300);
+    this.upsertLocalMessage(message);
     this.stats.received += 1;
     this.io.emit("message", message);
     this.io.emit("file", fileTransfer);
@@ -649,12 +672,23 @@ export class PeerRuntime {
   // Queues a failed message for offline delivery or records final failure.
   async queueOrFail(targetPeerId, payload, queueOffline, error, attempts = 0) {
     this.stats.failed += 1;
+    let queuedOffline = false;
+    let finalError = error;
     if (queueOffline) {
-      await this.bootstrap.storeOfflineMessage(targetPeerId, payload);
-      this.stats.queuedOffline += 1;
-      this.addLog(
-        `Queued message ${payload.messageId} for offline peer ${targetPeerId}`,
-      );
+      try {
+        await this.bootstrap.storeOfflineMessage(targetPeerId, payload);
+        queuedOffline = true;
+        this.stats.queuedOffline += 1;
+        this.addLog(
+          `Queued message ${payload.messageId} for offline peer ${targetPeerId}`,
+        );
+      } catch (queueError) {
+        finalError = `${error}; offline queue unavailable: ${queueError.message}`;
+        this.addLog(
+          `Delivery failed for ${targetPeerId} and offline queue is unavailable: ${queueError.message}`,
+          "error",
+        );
+      }
     } else {
       this.addLog(`Delivery failed for ${targetPeerId}: ${error}`, "error");
     }
@@ -663,19 +697,18 @@ export class PeerRuntime {
         messageId: payload.messageId,
         fromPeerId: this.config.peer.id,
         toPeerId: targetPeerId,
-        status: queueOffline ? "queued_offline" : "failed",
+        status: queuedOffline ? "queued_offline" : "failed",
         attempts,
-        errorMessage: error,
+        errorMessage: finalError,
       }),
     );
     this.emitStats();
-    return { ok: false, attempts, error, queuedOffline: queueOffline };
+    return { ok: false, attempts, error: finalError, queuedOffline };
   }
 
   // Adds a local outgoing message to the UI before delivery finishes.
   trackOutgoing(message) {
-    this.messages.push(message);
-    this.messages = this.messages.slice(-300);
+    this.upsertLocalMessage(message);
     this.io.emit("message", message);
     this.emitStats();
   }

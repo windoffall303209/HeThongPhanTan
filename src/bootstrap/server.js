@@ -38,9 +38,9 @@ const server = app.listen(config.bootstrap.port, () => {
   console.log(`[bootstrap] storage=${store.mode}`);
 });
 
-// Stops launcher-owned peers before shutting down the bootstrap server.
+// Shuts down only the tracker. Peer nodes must keep running independently so
+// existing peers can continue direct TCP chat even if bootstrap is unavailable.
 function shutdown() {
-  launcher.stopAll();
   server.close(() => process.exit(0));
 }
 

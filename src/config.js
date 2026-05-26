@@ -18,7 +18,7 @@ function boolFromEnv(name, fallback = false) {
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   bootstrap: {
-    port: intFromEnv("BOOTSTRAP_PORT", 8000),
+    port: intFromEnv("BOOTSTRAP_PORT", 3000),
     url: process.env.BOOTSTRAP_URL ?? "http://127.0.0.1:3000",
     peerTtlMs: intFromEnv("PEER_TTL_MS", 30000),
   },

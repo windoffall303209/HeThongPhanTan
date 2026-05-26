@@ -65,6 +65,7 @@ export class MemoryStore {
       webPort: Number(peer.webPort),
       publicKey: peer.publicKey ?? null,
       status: 'online',
+      lastSeenMs: Date.now(),
       lastSeen: nowIso(),
       updatedAt: nowIso()
     };
@@ -91,6 +92,7 @@ export class MemoryStore {
     const peer = this.peers.get(peerId);
     if (!peer) return null;
     peer.status = 'online';
+    peer.lastSeenMs = Date.now();
     peer.lastSeen = nowIso();
     peer.updatedAt = nowIso();
     this.peers.set(peerId, peer);
@@ -102,7 +104,8 @@ export class MemoryStore {
     const now = Date.now();
     const peers = [];
     for (const peer of this.peers.values()) {
-      const age = now - new Date(peer.lastSeen).getTime();
+      const lastSeenMs = peer.lastSeenMs ?? new Date(peer.lastSeen).getTime();
+      const age = Number.isFinite(lastSeenMs) ? now - lastSeenMs : ttlMs + 1;
       if (peer.status === 'online' && age > ttlMs) {
         peer.status = 'offline';
         peer.updatedAt = nowIso();

@@ -12,7 +12,8 @@
     "peer:c": "cross-env PEER_ID=peer-c USERNAME=Carol TCP_PORT=5103 WEB_PORT=3103 node src/peer/server.js",
     "dev:bootstrap": "nodemon src/bootstrap/server.js",
     "dev:peer": "nodemon src/peer/server.js",
-    "check": "node scripts/check-syntax.mjs"
+    "check": "node scripts/check-syntax.mjs",
+    "smoke:p2p": "node scripts/smoke-p2p-requirements.mjs"
   },
   "keywords": [
     "p2p",

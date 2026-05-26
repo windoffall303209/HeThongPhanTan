@@ -121,9 +121,11 @@ export class PeerLauncher {
         WEB_PORT: String(webPort),
         BOOTSTRAP_URL: this.bootstrapUrl
       },
+      detached: true,
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'ignore', 'ignore']
     });
+    child.unref();
 
     const record = {
       peerId,
@@ -137,24 +139,9 @@ export class PeerLauncher {
       stoppedAt: null,
       exitCode: null,
       signal: null,
-      logs: []
+      logs: ['[system] started as detached peer process']
     };
 
-    // Appends child process output to the launcher's in-memory log buffer.
-    const appendLog = (source, chunk) => {
-      const lines = chunk
-        .toString('utf8')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      for (const line of lines) {
-        record.logs.push(`[${source}] ${line}`);
-      }
-      record.logs = tail(record.logs, 120);
-    };
-
-    child.stdout.on('data', (chunk) => appendLog('out', chunk));
-    child.stderr.on('data', (chunk) => appendLog('err', chunk));
     child.on('exit', (code, signal) => {
       record.status = 'stopped';
       record.stoppedAt = nowIso();

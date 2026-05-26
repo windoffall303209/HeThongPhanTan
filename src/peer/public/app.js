@@ -63,6 +63,46 @@ function scrollBottom() {
   if (l) l.scrollTop = l.scrollHeight;
 }
 
+const statusRank = {
+  sending: 1,
+  failed: 2,
+  failed_queued: 3,
+  partial: 4,
+  received: 5,
+  queued_offline: 5,
+  delivered_from_queue: 6,
+  delivered_via_relay: 7,
+  delivered: 8,
+};
+
+function mergeMessage(existing, incoming) {
+  if (!existing) return incoming;
+  const existingRank = statusRank[String(existing.status ?? "").toLowerCase()] ?? 0;
+  const incomingRank = statusRank[String(incoming.status ?? "").toLowerCase()] ?? 0;
+  return incomingRank >= existingRank
+    ? { ...existing, ...incoming }
+    : { ...incoming, ...existing };
+}
+
+function normalizeMessages(messages) {
+  const byId = new Map();
+  const noId = [];
+  for (const message of messages ?? []) {
+    if (!message?.messageId) {
+      noId.push(message);
+      continue;
+    }
+    byId.set(message.messageId, mergeMessage(byId.get(message.messageId), message));
+  }
+  return [...noId, ...byId.values()].sort((a, b) =>
+    String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")),
+  );
+}
+
+function upsertMessage(message) {
+  state.messages = normalizeMessages([...state.messages, message]);
+}
+
 // ── Active chat ─────────────────────────────────────────────
 function selectChat(type, id) {
   activeChat = { type, id };
@@ -180,17 +220,18 @@ function renderGroupConvList() {
 // ── Render: messages ────────────────────────────────────────
 function filteredMessages() {
   if (!activeChat) return [];
+  const messages = normalizeMessages(state.messages);
   if (activeChat.type === "direct")
-    return state.messages.filter(
+    return messages.filter(
       (m) =>
         !m.groupId &&
         m.toPeerId !== "*" &&
         (m.fromPeerId === activeChat.id || m.toPeerId === activeChat.id),
     );
   if (activeChat.type === "group")
-    return state.messages.filter((m) => m.groupId === activeChat.id);
+    return messages.filter((m) => m.groupId === activeChat.id);
   if (activeChat.type === "broadcast")
-    return state.messages.filter((m) => m.toPeerId === "*" || m.broadcast);
+    return messages.filter((m) => m.toPeerId === "*" || m.broadcast);
   return [];
 }
 
@@ -339,6 +380,7 @@ function renderAll() {
 // ── Socket handlers ─────────────────────────────────────────
 socket.on("state", (next) => {
   Object.assign(state, next);
+  state.messages = normalizeMessages(state.messages);
   renderAll();
 });
 socket.on("peers", (peers) => {
@@ -357,21 +399,17 @@ socket.on("stats", (stats) => {
   renderStats(stats);
 });
 socket.on("messages", (messages) => {
-  state.messages = messages;
+  state.messages = normalizeMessages(messages);
   renderMessages();
 });
 socket.on("message", (msg) => {
-  // Deduplicate: skip if this messageId already exists in state.
-  if (msg.messageId && state.messages.some((m) => m.messageId === msg.messageId)) return;
-  state.messages.push(msg);
+  upsertMessage(msg);
   renderMessages();
   if (msg.fromPeerId !== selfPeerId)
     showToast(`Tin nhắn từ ${msg.fromPeerId}`, "success");
 });
 socket.on("message:update", (msg) => {
-  const i = state.messages.findIndex((m) => m.messageId === msg.messageId);
-  if (i >= 0) state.messages[i] = msg;
-  else state.messages.push(msg);
+  upsertMessage(msg);
   renderMessages();
 });
 socket.on("log", (log) => {
